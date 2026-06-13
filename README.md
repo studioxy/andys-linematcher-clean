@@ -10,6 +10,29 @@ What it does:
 - supports manual review in the console
 - writes matched results to Excel
 
+## Matching stack
+
+Detailed algorithm notes are included in:
+
+- [docs/MATCHING_STACK.md](docs/MATCHING_STACK.md)
+- `docs/MATCHING_STACK.pdf`
+
+The document explains:
+
+- normalization and country filtering
+- alias override behavior
+- the exact fuzzy scoring functions
+- thresholds, margins, and review routing
+- why this is deterministic fuzzy matching rather than ML
+
+To rebuild the PDF:
+
+```powershell
+python .\scripts\build_matching_stack_pdf.py
+```
+
+This requires `reportlab`. The tracked PDF in `docs/` is already ready to use.
+
 ## Run
 
 ```powershell
