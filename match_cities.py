@@ -25,13 +25,8 @@ SHREP_SHEET = "shrep"
 BRAND_NAME = "Andy's LineMatcher"
 TAGLINE = "Smart city matching for RC <-> Shipment Report"
 
-FULL_BANNER_LINES = [
-    "   █████╗ ███╗   ██╗██████╗ ██╗   ██╗",
-    "  ██╔══██╗████╗  ██║██╔══██╗╚██╗ ██╔╝",
-    "  ███████║██╔██╗ ██║██║  ██║ ╚████╔╝",
-    "  ██╔══██║██║╚██╗██║██║  ██║  ╚██╔╝",
-    "  ██║  ██║██║ ╚████║██████╔╝   ██║",
-    "  ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝",
+CONSOLE_BANNER_LINES = [
+    "  andy",
     "",
     "  ██╗     ██╗███╗   ██╗███████╗",
     "  ██║     ██║████╗  ██║██╔════╝",
@@ -48,14 +43,9 @@ FULL_BANNER_LINES = [
     "  ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝",
 ]
 
-COMPACT_BANNER_LINES = [
-    "   █████╗ ███╗   ██╗██████╗ ██╗   ██╗   ██╗     ██╗███╗   ██╗███████╗",
-    "  ██╔══██╗████╗  ██║██╔══██╗╚██╗ ██╔╝   ██║     ██║████╗  ██║██╔════╝",
-    "  ███████║██╔██╗ ██║██║  ██║ ╚████╔╝    ██║     ██║██╔██╗ ██║█████╗",
-    "  ██╔══██║██║╚██╗██║██║  ██║  ╚██╔╝     ██║     ██║██║╚██╗██║██╔══╝",
-    "  ██║  ██║██║ ╚████║██████╔╝   ██║      ███████╗██║██║ ╚████║███████╗",
-    "  ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝      ╚══════╝╚═╝╚═╝  ╚═══╝╚══════╝",
-    "                    MATCHER",
+MINI_BANNER_LINES = [
+    "  andy",
+    "  LINE MATCHER",
 ]
 
 RC_CITY_COL = "Destination City"
@@ -680,14 +670,11 @@ def count_status(records: list[dict[str, object]], status: str) -> int:
 
 def print_banner() -> None:
     terminal = shutil.get_terminal_size(fallback=(120, 40))
-    lines = (
-        FULL_BANNER_LINES
-        if terminal.columns >= 100 and terminal.lines >= 38
-        else COMPACT_BANNER_LINES
-    )
+    lines = CONSOLE_BANNER_LINES if terminal.columns >= 76 else MINI_BANNER_LINES
     print()
-    for line in lines:
-        print(colorize(line, "ember"))
+    for index, line in enumerate(lines):
+        tone = "dim" if "andy" in line.lower() else "ember"
+        print(colorize(line, tone))
     print(colorize(TAGLINE, "dim"))
     print(colorize("-" * 64, "ember"))
 
