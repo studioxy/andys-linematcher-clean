@@ -2,6 +2,36 @@
 
 Matcher dopasowuje miasta pomiędzy `shipment report` a `rate card`, liczy podobieństwo kandydatów i decyduje, czy para nadaje się do automatycznego złączenia, ręcznego review albo pozostawienia jako niedopasowana.
 
+## Minimalne warunki pliku wejściowego
+
+Plik wejściowy powinien spełniać podstawowy kontrakt danych:
+
+- format pliku: `.xlsx`
+- arkusze o nazwach:
+  - `rc`
+  - `shrep`
+- w arkuszu `rc` muszą istnieć kolumny:
+  - `Destination City`
+  - `Destination Country`
+- w arkuszu `shrep` muszą istnieć kolumny:
+  - `Delivery City`
+  - `Arrival Country`
+
+Dodatkowe kolumny są dozwolone. Program ich nie wymaga do samego matchowania, ale zachowuje je w arkuszu wyjściowym `matched_rows`.
+
+Najbezpieczniejszy układ wejścia jest taki:
+
+- nagłówki znajdują się w pierwszym wierszu
+- dane są w jednej spójnej tabeli na arkusz
+- nie ma kilku wierszy tytułowych nad tabelą
+- nazwy wymaganych kolumn pasują dokładnie do oczekiwanej pisowni
+
+Warto też pamiętać:
+
+- miasta i kraje nie muszą być idealnie ujednolicone, bo matcher je normalizuje
+- puste wartości są dozwolone, ale osłabiają szansę na poprawne dopasowanie
+- jeśli zmieni się nazwa arkusza albo nagłówka wymaganej kolumny, program nie znajdzie danych automatycznie
+
 ## Po co istnieje ten matcher
 
 W praktyce dane logistyczne rzadko są idealnie spójne:

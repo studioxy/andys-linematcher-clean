@@ -2,6 +2,36 @@
 
 The matcher links cities between `shipment report` and `rate card`, scores likely candidates, and decides whether a pair should be auto-matched, sent to review, or left unmatched.
 
+## Minimum input requirements
+
+The input workbook should follow this basic contract:
+
+- file format: `.xlsx`
+- worksheets named:
+  - `rc`
+  - `shrep`
+- worksheet `rc` must include:
+  - `Destination City`
+  - `Destination Country`
+- worksheet `shrep` must include:
+  - `Delivery City`
+  - `Arrival Country`
+
+Additional columns are allowed. They are not required for matching itself, but they are preserved in the output sheet `matched_rows`.
+
+The safest input layout is:
+
+- headers in the first row
+- one coherent data table per worksheet
+- no extra title rows above the table
+- exact header names for the required columns
+
+It is also worth noting:
+
+- city and country values do not need to be perfectly standardized, because the matcher normalizes them
+- empty values are allowed, but they reduce the chance of a successful match
+- if a worksheet name or a required header name changes, the program will not discover that data automatically
+
 ## Overview
 
 The matcher is deterministic. It does not use ML, embeddings, LLM reasoning, or a trained model.
