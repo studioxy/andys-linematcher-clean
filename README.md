@@ -53,6 +53,12 @@ Or use the console launcher:
 .\linematcher.cmd
 ```
 
+When started without an explicit workbook path, the launcher:
+
+- first looks for the configured filename from `linematcher.config.json`
+- otherwise uses the only `.xlsx` file in the launcher folder
+- if several `.xlsx` files exist, asks you which one to open
+
 Manual review mode:
 
 ```powershell
@@ -88,6 +94,18 @@ asks whether to enter review, and waits for Enter before closing the console.
 ```powershell
 .\build_exe.cmd
 ```
+
+## Config
+
+The repo includes:
+
+- [linematcher.config.json](linematcher.config.json)
+
+It controls:
+
+- default input workbook filename
+- worksheet names for `rc` and `shrep`
+- required city/country column names for both sheets
 
 ## Files intentionally not tracked
 

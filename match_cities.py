@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import itertools
+import json
 import re
 import shutil
 import sys
@@ -60,6 +61,11 @@ RC_CITY_COL = "Destination City"
 RC_COUNTRY_COL = "Destination Country"
 SHREP_CITY_COL = "Delivery City"
 SHREP_COUNTRY_COL = "Arrival Country"
+
+DEFAULT_INPUT_FILENAME = "colector.xlsx"
+DEFAULT_OUTPUT_PATH = Path("outputs/city_matching.xlsx")
+DEFAULT_ALIASES_PATH = Path("city_aliases.csv")
+DEFAULT_CONFIG_FILENAME = "linematcher.config.json"
 
 ALIAS_HEADERS = [
     "shrep_city",
@@ -146,6 +152,128 @@ def colorize(text: object, color: str, enabled: bool | None = None) -> str:
     return f"{prefix}{value}{ANSI_COLORS['reset']}"
 
 
+def app_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def default_config() -> MatcherConfig:
+    return MatcherConfig(
+        input_filename=DEFAULT_INPUT_FILENAME,
+        rc_sheet=RC_SHEET,
+        shrep_sheet=SHREP_SHEET,
+        rc_city_col=RC_CITY_COL,
+        rc_country_col=RC_COUNTRY_COL,
+        shrep_city_col=SHREP_CITY_COL,
+        shrep_country_col=SHREP_COUNTRY_COL,
+    )
+
+
+def load_config(path: Path) -> MatcherConfig:
+    config = default_config()
+    if not path.exists():
+        return config
+
+    with path.open("r", encoding="utf-8") as handle:
+        raw = json.load(handle)
+
+    if not isinstance(raw, dict):
+        raise ValueError("Config root must be a JSON object.")
+
+    sheets = raw.get("sheets") if isinstance(raw.get("sheets"), dict) else {}
+    columns = raw.get("columns") if isinstance(raw.get("columns"), dict) else {}
+
+    def pick(value: object, fallback: str, label: str) -> str:
+        if value is None:
+            return fallback
+        text = str(value).strip()
+        if not text:
+            raise ValueError(f"Config field must not be empty: {label}")
+        return text
+
+    return MatcherConfig(
+        input_filename=pick(
+            raw.get("input_filename"),
+            config.input_filename,
+            "input_filename",
+        ),
+        rc_sheet=pick(sheets.get("rc"), config.rc_sheet, "sheets.rc"),
+        shrep_sheet=pick(sheets.get("shrep"), config.shrep_sheet, "sheets.shrep"),
+        rc_city_col=pick(columns.get("rc_city"), config.rc_city_col, "columns.rc_city"),
+        rc_country_col=pick(
+            columns.get("rc_country"),
+            config.rc_country_col,
+            "columns.rc_country",
+        ),
+        shrep_city_col=pick(
+            columns.get("shrep_city"),
+            config.shrep_city_col,
+            "columns.shrep_city",
+        ),
+        shrep_country_col=pick(
+            columns.get("shrep_country"),
+            config.shrep_country_col,
+            "columns.shrep_country",
+        ),
+    )
+
+
+def apply_config(config: MatcherConfig) -> None:
+    global RC_SHEET, SHREP_SHEET
+    global RC_CITY_COL, RC_COUNTRY_COL, SHREP_CITY_COL, SHREP_COUNTRY_COL
+
+    RC_SHEET = config.rc_sheet
+    SHREP_SHEET = config.shrep_sheet
+    RC_CITY_COL = config.rc_city_col
+    RC_COUNTRY_COL = config.rc_country_col
+    SHREP_CITY_COL = config.shrep_city_col
+    SHREP_COUNTRY_COL = config.shrep_country_col
+
+
+def resolve_input_workbook(
+    explicit_input: Path | None,
+    config: MatcherConfig,
+    base_dir: Path,
+    input_func: Callable[[str], str] = input,
+    output_func: Callable[[str], None] = print,
+) -> Path:
+    if explicit_input is not None:
+        return explicit_input
+
+    configured = base_dir / config.input_filename
+    if configured.exists():
+        return configured
+
+    candidates = sorted(base_dir.glob("*.xlsx"), key=lambda item: item.name.lower())
+    if not candidates:
+        raise FileNotFoundError(
+            f"No .xlsx input found in {base_dir}. Expected {config.input_filename!r} "
+            "or a selectable workbook in the launcher folder."
+        )
+    if len(candidates) == 1:
+        return candidates[0]
+
+    output_func("")
+    output_func(colorize("Available .xlsx files", "cyan"))
+    for index, candidate in enumerate(candidates, start=1):
+        output_func(f"  {index}) {candidate.name}")
+
+    while True:
+        try:
+            answer = input_func(
+                colorize("Choose workbook [1-" + str(len(candidates)) + "]: ", "cyan")
+            ).strip()
+        except EOFError as exc:
+            raise ValueError("Multiple .xlsx files found and no selection was provided.") from exc
+
+        if answer.isdigit():
+            choice = int(answer)
+            if 1 <= choice <= len(candidates):
+                return candidates[choice - 1]
+        output_func(colorize("Please pick a valid number.", "yellow"))
+
+
 @dataclass(frozen=True)
 class Candidate:
     rc_row_id: int
@@ -166,6 +294,17 @@ class MatchResult:
     normalized_delivery_city: str
     candidate_count: int
     top_candidates: list[tuple[str, str, float]]
+
+
+@dataclass(frozen=True)
+class MatcherConfig:
+    input_filename: str
+    rc_sheet: str
+    shrep_sheet: str
+    rc_city_col: str
+    rc_country_col: str
+    shrep_city_col: str
+    shrep_country_col: str
 
 
 class Spinner:
@@ -1021,19 +1160,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Match shrep Delivery City rows to rc Destination City rows."
     )
-    parser.add_argument("input", nargs="?", default=Path("colector.xlsx"), type=Path)
+    parser.add_argument("input", nargs="?", type=Path)
     parser.add_argument(
         "-o",
         "--output",
-        default=Path("outputs/city_matching.xlsx"),
+        default=DEFAULT_OUTPUT_PATH,
         type=Path,
         help="Output .xlsx path.",
     )
     parser.add_argument(
         "--aliases",
-        default=Path("city_aliases.csv"),
+        default=DEFAULT_ALIASES_PATH,
         type=Path,
         help="Optional approved alias CSV.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Optional JSON config file for workbook name, sheets, and columns.",
     )
     parser.add_argument("--auto-threshold", default=90.0, type=float)
     parser.add_argument("--review-threshold", default=75.0, type=float)
@@ -1062,9 +1206,20 @@ def main() -> None:
     frozen = bool(getattr(sys, "frozen", False))
     args = parse_args(raw_args)
     enable_utf8_console()
+    base_dir = app_root()
     print_banner()
 
     try:
+        config_path = args.config if args.config else base_dir / DEFAULT_CONFIG_FILENAME
+        config = load_config(config_path)
+        apply_config(config)
+
+        if args.output == DEFAULT_OUTPUT_PATH and not args.output.is_absolute():
+            args.output = base_dir / args.output
+        if args.aliases == DEFAULT_ALIASES_PATH and not args.aliases.is_absolute():
+            args.aliases = base_dir / args.aliases
+        args.input = resolve_input_workbook(args.input, config, base_dir)
+
         with step("Reading workbook"):
             rc, shrep = load_input(args.input)
 

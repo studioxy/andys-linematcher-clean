@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from match_cities import (
     Candidate,
@@ -6,10 +8,13 @@ from match_cities import (
     alias_row_from_match,
     apply_manual_choice,
     colorize,
+    default_config,
     interactive_review,
+    load_config,
     match_one,
     normalize_city,
     render_matched_pairs,
+    resolve_input_workbook,
     should_pause_on_exit,
     should_prompt_for_review,
 )
@@ -196,6 +201,69 @@ class CityMatcherTests(unittest.TestCase):
         self.assertIn("100.0", lines[0])
         self.assertIn("manual", lines[1])
         self.assertIn("36.4", lines[1])
+
+    def test_load_config_reads_custom_workbook_and_columns(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "linematcher.config.json"
+            path.write_text(
+                """
+{
+  "input_filename": "custom.xlsx",
+  "sheets": {"rc": "rate-card", "shrep": "shipment-report"},
+  "columns": {
+    "rc_city": "RC City",
+    "rc_country": "RC Country",
+    "shrep_city": "Ship City",
+    "shrep_country": "Ship Country"
+  }
+}
+""".strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+            self.assertEqual(config.input_filename, "custom.xlsx")
+            self.assertEqual(config.rc_sheet, "rate-card")
+            self.assertEqual(config.shrep_sheet, "shipment-report")
+            self.assertEqual(config.rc_city_col, "RC City")
+            self.assertEqual(config.rc_country_col, "RC Country")
+            self.assertEqual(config.shrep_city_col, "Ship City")
+            self.assertEqual(config.shrep_country_col, "Ship Country")
+
+    def test_resolve_input_workbook_uses_single_xlsx_when_default_name_missing(self):
+        with TemporaryDirectory() as tmp:
+            base_dir = Path(tmp)
+            workbook = base_dir / "anything.xlsx"
+            workbook.write_bytes(b"fake")
+
+            chosen = resolve_input_workbook(
+                explicit_input=None,
+                config=default_config(),
+                base_dir=base_dir,
+                input_func=lambda _: "1",
+                output_func=lambda _: None,
+            )
+
+            self.assertEqual(chosen, workbook)
+
+    def test_resolve_input_workbook_prompts_when_multiple_xlsx_exist(self):
+        with TemporaryDirectory() as tmp:
+            base_dir = Path(tmp)
+            first = base_dir / "a.xlsx"
+            second = base_dir / "b.xlsx"
+            first.write_bytes(b"fake")
+            second.write_bytes(b"fake")
+
+            chosen = resolve_input_workbook(
+                explicit_input=None,
+                config=default_config(),
+                base_dir=base_dir,
+                input_func=lambda _: "2",
+                output_func=lambda _: None,
+            )
+
+            self.assertEqual(chosen, second)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,13 @@
+{
+  "input_filename": "colector.xlsx",
+  "sheets": {
+    "rc": "rc",
+    "shrep": "shrep"
+  },
+  "columns": {
+    "rc_city": "Destination City",
+    "rc_country": "Destination Country",
+    "shrep_city": "Delivery City",
+    "shrep_country": "Arrival Country"
+  }
+}

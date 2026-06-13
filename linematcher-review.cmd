@@ -12,7 +12,7 @@ if exist "%APP_DIR%.venv\Scripts\python.exe" (
 )
 
 if "%~1"=="" (
-  "%PY%" "%APP_DIR%match_cities.py" "%APP_DIR%colector.xlsx" -o "%APP_DIR%outputs\city_matching.xlsx" --review --save-aliases
+  "%PY%" "%APP_DIR%match_cities.py" --review --save-aliases
 ) else (
   "%PY%" "%APP_DIR%match_cities.py" %* --review --save-aliases
 )
