@@ -36,7 +36,7 @@ Applied first to city names and country values:
 
 - trims whitespace
 - converts to uppercase
-- removes diacritics with Unicode NFKD normalization
+- removes diacritics with Unicode `NFKD` normalization
 - strips non-alphanumeric characters to spaces
 - collapses repeated whitespace
 
@@ -115,7 +115,9 @@ Implementation:
 
 Formula:
 
-- `score_seq = 100 * SequenceMatcher(None, left, right).ratio()`
+```text
+score_seq = 100 * SequenceMatcher(None, left, right).ratio()
+```
 
 This is Ratcliff-Obershelp style similarity. It rewards large shared character blocks and works well for spelling variants such as:
 
@@ -158,7 +160,7 @@ Logic:
 
 Formula:
 
-- if `shorter ⊆ longer`
+- if `shorter` is a subset of `longer`
 - `token_gap = len(longer) - len(shorter)`
 - `score_subset = max(90, 97 - 2 * token_gap)`
 - otherwise `score_subset = 0`

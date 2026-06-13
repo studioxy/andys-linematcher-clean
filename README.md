@@ -16,6 +16,8 @@ Detailed algorithm notes are included in:
 
 - [docs/MATCHING_STACK.md](docs/MATCHING_STACK.md)
 - `docs/MATCHING_STACK.pdf`
+- [docs/MATCHING_STACK_PL.md](docs/MATCHING_STACK_PL.md)
+- `docs/MATCHING_STACK_PL.pdf`
 
 The document explains:
 
@@ -31,7 +33,13 @@ To rebuild the PDF:
 python .\scripts\build_matching_stack_pdf.py
 ```
 
-This requires `reportlab`. The tracked PDF in `docs/` is already ready to use.
+To rebuild only the Polish version:
+
+```powershell
+python .\scripts\build_matching_stack_pdf.py --lang pl
+```
+
+This requires `reportlab`. The tracked PDFs in `docs/` are already ready to use.
 
 ## Run
 
