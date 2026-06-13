@@ -46,7 +46,7 @@ def build_block_banner(text: str) -> list[str]:
     rows: list[str] = []
     for row_index in range(6):
         parts = [BANNER_FONT[char][row_index] for char in text]
-        rows.append("  " + " ".join(parts))
+        rows.append("  " + "".join(parts))
     return rows
 
 
@@ -678,7 +678,7 @@ def count_status(records: list[dict[str, object]], status: str) -> int:
 
 def print_banner() -> None:
     terminal = shutil.get_terminal_size(fallback=(120, 40))
-    lines = CONSOLE_BANNER_LINES if terminal.columns >= 132 else MINI_BANNER_LINES
+    lines = CONSOLE_BANNER_LINES if terminal.columns >= 112 else MINI_BANNER_LINES
     print()
     for line in lines:
         tone = "ember" if line in CONSOLE_BANNER_LINES else "dim"
