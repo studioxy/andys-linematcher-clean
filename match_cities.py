@@ -4,6 +4,7 @@ import argparse
 import csv
 import itertools
 import re
+import shutil
 import sys
 import threading
 import time
@@ -23,6 +24,39 @@ SHREP_SHEET = "shrep"
 
 BRAND_NAME = "Andy's LineMatcher"
 TAGLINE = "Smart city matching for RC <-> Shipment Report"
+
+FULL_BANNER_LINES = [
+    "   █████╗ ███╗   ██╗██████╗ ██╗   ██╗",
+    "  ██╔══██╗████╗  ██║██╔══██╗╚██╗ ██╔╝",
+    "  ███████║██╔██╗ ██║██║  ██║ ╚████╔╝",
+    "  ██╔══██║██║╚██╗██║██║  ██║  ╚██╔╝",
+    "  ██║  ██║██║ ╚████║██████╔╝   ██║",
+    "  ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝",
+    "",
+    "  ██╗     ██╗███╗   ██╗███████╗",
+    "  ██║     ██║████╗  ██║██╔════╝",
+    "  ██║     ██║██╔██╗ ██║█████╗",
+    "  ██║     ██║██║╚██╗██║██╔══╝",
+    "  ███████╗██║██║ ╚████║███████╗",
+    "  ╚══════╝╚═╝╚═╝  ╚═══╝╚══════╝",
+    "",
+    "  ███╗   ███╗ █████╗ ████████╗ ██████╗██╗  ██╗███████╗██████╗",
+    "  ████╗ ████║██╔══██╗╚══██╔══╝██╔════╝██║  ██║██╔════╝██╔══██╗",
+    "  ██╔████╔██║███████║   ██║   ██║     ███████║█████╗  ██████╔╝",
+    "  ██║╚██╔╝██║██╔══██║   ██║   ██║     ██╔══██║██╔══╝  ██╔══██╗",
+    "  ██║ ╚═╝ ██║██║  ██║   ██║   ╚██████╗██║  ██║███████╗██║  ██║",
+    "  ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝",
+]
+
+COMPACT_BANNER_LINES = [
+    "   █████╗ ███╗   ██╗██████╗ ██╗   ██╗   ██╗     ██╗███╗   ██╗███████╗",
+    "  ██╔══██╗████╗  ██║██╔══██╗╚██╗ ██╔╝   ██║     ██║████╗  ██║██╔════╝",
+    "  ███████║██╔██╗ ██║██║  ██║ ╚████╔╝    ██║     ██║██╔██╗ ██║█████╗",
+    "  ██╔══██║██║╚██╗██║██║  ██║  ╚██╔╝     ██║     ██║██║╚██╗██║██╔══╝",
+    "  ██║  ██║██║ ╚████║██████╔╝   ██║      ███████╗██║██║ ╚████║███████╗",
+    "  ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝      ╚══════╝╚═╝╚═╝  ╚═══╝╚══════╝",
+    "                    MATCHER",
+]
 
 RC_CITY_COL = "Destination City"
 RC_COUNTRY_COL = "Destination Country"
@@ -67,6 +101,29 @@ ANSI_COLORS = {
     "red": "\033[31m",
     "white": "\033[97m",
 }
+
+
+def enable_utf8_console() -> None:
+    if sys.platform != "win32":
+        return
+
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetConsoleOutputCP(65001)
+        kernel32.SetConsoleCP(65001)
+    except Exception:
+        pass
+
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
 
 
 def color_enabled() -> bool:
@@ -622,8 +679,15 @@ def count_status(records: list[dict[str, object]], status: str) -> int:
 
 
 def print_banner() -> None:
+    terminal = shutil.get_terminal_size(fallback=(120, 40))
+    lines = (
+        FULL_BANNER_LINES
+        if terminal.columns >= 100 and terminal.lines >= 38
+        else COMPACT_BANNER_LINES
+    )
     print()
-    print(colorize(BRAND_NAME, "ember"))
+    for line in lines:
+        print(colorize(line, "ember"))
     print(colorize(TAGLINE, "dim"))
     print(colorize("-" * 64, "ember"))
 
@@ -1002,6 +1066,7 @@ def main() -> None:
     no_args_mode = len(raw_args) == 0
     frozen = bool(getattr(sys, "frozen", False))
     args = parse_args(raw_args)
+    enable_utf8_console()
     print_banner()
 
     try:
