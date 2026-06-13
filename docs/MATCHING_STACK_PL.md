@@ -1,6 +1,6 @@
 # Stos dopasowania miast
 
-Ten dokument opisuje dokładnie, jak działa dopasowywanie miast pomiędzy `shipment report` a `rate card`, jakie algorytmy są użyte i w jaki sposób program podejmuje decyzję, czy para jest wystarczająco pewna do automatycznego złączenia.
+Matcher dopasowuje miasta pomiędzy `shipment report` a `rate card`, liczy podobieństwo kandydatów i decyduje, czy para nadaje się do automatycznego złączenia, ręcznego review albo pozostawienia jako niedopasowana.
 
 ## Po co istnieje ten matcher
 
@@ -12,11 +12,11 @@ W praktyce dane logistyczne rzadko są idealnie spójne:
 - czasem kolejność tokenów jest inna
 - zdarzają się drobne literówki albo transliteracyjne warianty pisowni
 
-Naszym celem nie jest tutaj liczenie transit time. Ten program robi tylko jedną rzecz:
+Ten program robi tylko jedną rzecz:
 
 - znajduje najbardziej prawdopodobne połączenie `Delivery City` z `shipment report` do `Destination City` z `rate card`
 
-Czyli najpierw robimy porządne, audytowalne dopasowanie danych wejściowych, a dopiero potem ktoś inny może na tym liczyć `TT`.
+Czyli robimy porządne, audytowalne dopasowanie danych wejściowych, które można później bezpiecznie wykorzystać w dalszej pracy operacyjnej.
 
 ## Co ten program robi, a czego nie robi
 

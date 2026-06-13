@@ -1,6 +1,6 @@
 # Andy's LineMatcher Matching Stack
 
-This document describes exactly how the matcher works, what scoring functions are used, and how the final decision is made.
+The matcher links cities between `shipment report` and `rate card`, scores likely candidates, and decides whether a pair should be auto-matched, sent to review, or left unmatched.
 
 ## Overview
 

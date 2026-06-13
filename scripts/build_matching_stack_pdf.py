@@ -49,8 +49,6 @@ class DocumentSpec:
     source: Path
     output: Path
     header: str
-    kicker: str
-    deck: str
 
 
 SPECS = {
@@ -58,19 +56,30 @@ SPECS = {
         language="en",
         source=DOCS_DIR / "MATCHING_STACK.md",
         output=DOCS_DIR / "MATCHING_STACK.pdf",
-        header="ANDY'S LINEMATCHER :: ENGLISH EDITION",
-        kicker="deterministic fuzzy matching / no ML / review-aware",
-        deck="Dark technical note for the city matching pipeline.",
+        header="ANDY'S LINEMATCHER",
     ),
     "pl": DocumentSpec(
         language="pl",
         source=DOCS_DIR / "MATCHING_STACK_PL.md",
         output=DOCS_DIR / "MATCHING_STACK_PL.pdf",
-        header="ANDY'S LINEMATCHER :: POLSKA EDYCJA",
-        kicker="deterministyczne dopasowanie fuzzy / bez ML / gotowe do review",
-        deck="Ciemny dokument techniczny opisujący stos dopasowania miast.",
+        header="ANDY'S LINEMATCHER",
     ),
 }
+
+
+BANNER_LINES = [
+    r"   ___              __         ",
+    r"  /   |  ____  ____/ /_  __  __",
+    r" / /| | / __ \/ __  / / / / / /",
+    r"/ ___ |/ / / / /_/ / /_/ /_/ / ",
+    r"/_/  |_/_/ /_/\__,_/\__, /\__, /",
+    r"                   /____//____/ ",
+    r"    __    _                __  ___      __       __             ",
+    r"   / /   (_)___  ___      /  |/  /___ _/ /______/ /_  ___  _____",
+    r"  / /   / / __ \/ _ \    / /|_/ / __ `/ __/ ___/ __ \/ _ \/ ___/",
+    r" / /___/ / / / /  __/   / /  / / /_/ / /_/ /__/ / / /  __/ /    ",
+    r"/_____/_/_/ /_/\___/   /_/  /_/\__,_/\__/\___/_/ /_/\___/_/     ",
+]
 
 
 def register_fonts() -> dict[str, str]:
@@ -124,42 +133,22 @@ def build_styles(fonts: dict[str, str]) -> dict[str, ParagraphStyle]:
     base = getSampleStyleSheet()
     styles: dict[str, ParagraphStyle] = {}
 
-    styles["eyebrow"] = ParagraphStyle(
-        "Eyebrow",
-        parent=base["BodyText"],
-        fontName=fonts["mono"],
-        fontSize=8.6,
-        leading=11,
-        textColor=MUTED,
-        alignment=TA_LEFT,
-        spaceAfter=6,
-    )
     styles["title"] = ParagraphStyle(
         "Title",
         parent=base["Heading1"],
         fontName=fonts["sans"],
-        fontSize=25.5,
-        leading=30,
+        fontSize=23.5,
+        leading=28,
         textColor=EMBER,
         alignment=TA_LEFT,
-        spaceAfter=4,
-    )
-    styles["deck"] = ParagraphStyle(
-        "Deck",
-        parent=base["BodyText"],
-        fontName=fonts["sans"],
-        fontSize=11.4,
-        leading=16,
-        textColor=MUTED,
-        alignment=TA_LEFT,
-        spaceAfter=8,
+        spaceAfter=6,
     )
     styles["lead"] = ParagraphStyle(
         "Lead",
         parent=base["BodyText"],
         fontName=fonts["sans"],
-        fontSize=11.1,
-        leading=16.6,
+        fontSize=11.05,
+        leading=16.5,
         textColor=TEXT,
         alignment=TA_LEFT,
         spaceAfter=0,
@@ -167,7 +156,7 @@ def build_styles(fonts: dict[str, str]) -> dict[str, ParagraphStyle]:
     styles["h2"] = ParagraphStyle(
         "H2",
         parent=base["Heading2"],
-        fontName=fonts["sans"],
+        fontName=f"{fonts['sans']}-Bold" if fonts["sans"] != "Helvetica" else "Helvetica-Bold",
         fontSize=15.5,
         leading=20,
         textColor=TEXT,
@@ -178,9 +167,9 @@ def build_styles(fonts: dict[str, str]) -> dict[str, ParagraphStyle]:
     styles["h3"] = ParagraphStyle(
         "H3",
         parent=base["Heading3"],
-        fontName=fonts["sans"],
-        fontSize=10.2,
-        leading=13.6,
+        fontName=f"{fonts['sans']}-Bold" if fonts["sans"] != "Helvetica" else "Helvetica-Bold",
+        fontSize=10.1,
+        leading=13.4,
         textColor=PISTACHIO,
         alignment=TA_LEFT,
         spaceBefore=7,
@@ -190,8 +179,8 @@ def build_styles(fonts: dict[str, str]) -> dict[str, ParagraphStyle]:
         "Body",
         parent=base["BodyText"],
         fontName=fonts["sans"],
-        fontSize=10.45,
-        leading=15.2,
+        fontSize=10.4,
+        leading=15.1,
         textColor=TEXT,
         alignment=TA_LEFT,
         spaceAfter=5,
@@ -212,6 +201,26 @@ def build_styles(fonts: dict[str, str]) -> dict[str, ParagraphStyle]:
         leading=13.1,
         textColor=PISTACHIO,
         backColor=SURFACE,
+        spaceAfter=0,
+    )
+    styles["ascii"] = ParagraphStyle(
+        "Ascii",
+        parent=base["BodyText"],
+        fontName=fonts["mono"],
+        fontSize=8.35,
+        leading=9.2,
+        textColor=EMBER,
+        alignment=TA_LEFT,
+        spaceAfter=0,
+    )
+    styles["header"] = ParagraphStyle(
+        "Header",
+        parent=base["BodyText"],
+        fontName=fonts["mono"],
+        fontSize=8.2,
+        leading=10,
+        textColor=MUTED,
+        alignment=TA_LEFT,
         spaceAfter=0,
     )
     return styles
@@ -255,7 +264,11 @@ def build_panel(paragraph: Paragraph, content_width: float) -> Table:
     return panel
 
 
-def build_code_block(text: str, styles: dict[str, ParagraphStyle], content_width: float) -> Table:
+def build_code_block(
+    text: str,
+    styles: dict[str, ParagraphStyle],
+    content_width: float,
+) -> Table:
     code = Preformatted(text, styles["code"])
     panel = Table([[code]], colWidths=[content_width])
     panel.setStyle(
@@ -273,9 +286,30 @@ def build_code_block(text: str, styles: dict[str, ParagraphStyle], content_width
     return panel
 
 
+def build_ascii_banner(
+    styles: dict[str, ParagraphStyle],
+    content_width: float,
+) -> Table:
+    banner = Preformatted("\n".join(BANNER_LINES), styles["ascii"])
+    panel = Table([[banner]], colWidths=[content_width])
+    panel.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), BG),
+                ("BOX", (0, 0), (-1, -1), 0.8, RULE),
+                ("LINEBELOW", (0, 0), (-1, -1), 2.1, EMBER),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ]
+        )
+    )
+    return panel
+
+
 def md_to_story(
     md_text: str,
-    spec: DocumentSpec,
     styles: dict[str, ParagraphStyle],
     content_width: float,
 ) -> list[object]:
@@ -312,11 +346,10 @@ def md_to_story(
 
         if line.startswith("# "):
             title_seen = True
-            story.append(Spacer(1, 8 * mm))
-            story.append(Paragraph(spec.header, styles["eyebrow"]))
+            story.append(Spacer(1, 5 * mm))
+            story.append(build_ascii_banner(styles, content_width))
+            story.append(Spacer(1, 6))
             story.append(Paragraph(line[2:], styles["title"]))
-            story.append(Paragraph(spec.kicker, styles["eyebrow"]))
-            story.append(Paragraph(spec.deck, styles["deck"]))
             story.append(
                 HRFlowable(
                     width="100%",
@@ -332,7 +365,12 @@ def md_to_story(
             flush_code()
             h2_seen = True
             story.append(Spacer(1, 6))
-            story.append(Paragraph(render_inline(line[3:], styles["code"].fontName), styles["h2"]))
+            story.append(
+                Paragraph(
+                    render_inline(line[3:], styles["code"].fontName),
+                    styles["h2"],
+                )
+            )
             story.append(
                 HRFlowable(
                     width="100%",
@@ -346,7 +384,12 @@ def md_to_story(
 
         if line.startswith("### "):
             flush_code()
-            story.append(Paragraph(render_inline(line[4:], styles["code"].fontName), styles["h3"]))
+            story.append(
+                Paragraph(
+                    render_inline(line[4:], styles["code"].fontName),
+                    styles["h3"],
+                )
+            )
             continue
 
         if line.startswith("- "):
@@ -371,7 +414,15 @@ def md_to_story(
 
         paragraph = Paragraph(render_inline(line, styles["code"].fontName), styles["body"])
         if title_seen and not lead_consumed and not h2_seen:
-            story.append(build_panel(Paragraph(render_inline(line, styles["code"].fontName), styles["lead"]), content_width))
+            story.append(
+                build_panel(
+                    Paragraph(
+                        render_inline(line, styles["code"].fontName),
+                        styles["lead"],
+                    ),
+                    content_width,
+                )
+            )
             story.append(Spacer(1, 9))
             lead_consumed = True
             continue
@@ -416,7 +467,7 @@ def build_pdf(spec: DocumentSpec, fonts: dict[str, str]) -> Path:
         title=spec.source.stem,
         author="Codex",
     )
-    story = md_to_story(md_text, spec, styles, doc.width)
+    story = md_to_story(md_text, styles, doc.width)
     renderer = draw_page(spec, fonts)
     doc.build(story, onFirstPage=renderer, onLaterPages=renderer)
     return spec.output
