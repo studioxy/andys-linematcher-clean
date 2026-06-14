@@ -288,12 +288,34 @@ class MatchResult:
     status: str
     method: str
     score: float
+    sequence_score: float | None
+    token_sort_score: float | None
+    subset_score: float | None
+    margin: float | None
     rc_row_id: int | None
     destination_country: str | None
     destination_city: str | None
     normalized_delivery_city: str
     candidate_count: int
-    top_candidates: list[tuple[str, str, float]]
+    top_candidates: list["RankedChoice"]
+
+
+@dataclass(frozen=True)
+class ScoreBreakdown:
+    sequence: float
+    token_sort: float
+    subset: float
+    final: float
+
+
+@dataclass(frozen=True)
+class RankedChoice:
+    country: str
+    city: str
+    score: float
+    sequence_score: float
+    token_sort_score: float
+    subset_score: float
 
 
 @dataclass(frozen=True)
@@ -425,16 +447,30 @@ def subset_score(left: str, right: str) -> float:
     return 0.0
 
 
-def city_score(left: str, right: str) -> float:
+def city_score_breakdown(left: str, right: str) -> ScoreBreakdown:
     if not left or not right:
-        return 0.0
+        return ScoreBreakdown(sequence=0.0, token_sort=0.0, subset=0.0, final=0.0)
     if left == right:
-        return 100.0
-    return max(
-        sequence_score(left, right),
-        token_sort_score(left, right),
-        subset_score(left, right),
+        return ScoreBreakdown(
+            sequence=100.0,
+            token_sort=100.0,
+            subset=100.0,
+            final=100.0,
+        )
+
+    score_sequence = sequence_score(left, right)
+    score_token_sort = token_sort_score(left, right)
+    score_subset = subset_score(left, right)
+    return ScoreBreakdown(
+        sequence=score_sequence,
+        token_sort=score_token_sort,
+        subset=score_subset,
+        final=max(score_sequence, score_token_sort, score_subset),
     )
+
+
+def city_score(left: str, right: str) -> float:
+    return city_score_breakdown(left, right).final
 
 
 def read_sheet_records(path: Path, sheet_name: str) -> list[dict[str, object]]:
@@ -518,14 +554,14 @@ def load_aliases(path: Path | None) -> dict[tuple[str, str], tuple[str, str]]:
 
 
 def dedupe_ranked(
-    ranked: Iterable[tuple[Candidate, float]],
-) -> list[tuple[Candidate, float]]:
-    best_by_row: dict[int, tuple[Candidate, float]] = {}
-    for candidate, score in ranked:
+    ranked: Iterable[tuple[Candidate, ScoreBreakdown]],
+) -> list[tuple[Candidate, ScoreBreakdown]]:
+    best_by_row: dict[int, tuple[Candidate, ScoreBreakdown]] = {}
+    for candidate, breakdown in ranked:
         current = best_by_row.get(candidate.rc_row_id)
-        if current is None or score > current[1]:
-            best_by_row[candidate.rc_row_id] = (candidate, score)
-    return sorted(best_by_row.values(), key=lambda item: item[1], reverse=True)
+        if current is None or breakdown.final > current[1].final:
+            best_by_row[candidate.rc_row_id] = (candidate, breakdown)
+    return sorted(best_by_row.values(), key=lambda item: item[1].final, reverse=True)
 
 
 def match_one(
@@ -557,13 +593,24 @@ def match_one(
                 status="auto_matched",
                 method="alias",
                 score=100.0,
+                sequence_score=None,
+                token_sort_score=None,
+                subset_score=None,
+                margin=None,
                 rc_row_id=candidate.rc_row_id,
                 destination_country=candidate.destination_country,
                 destination_city=candidate.destination_city,
                 normalized_delivery_city=normalized_city,
                 candidate_count=len(candidate_pool),
                 top_candidates=[
-                    (candidate.destination_country, candidate.destination_city, 100.0)
+                    RankedChoice(
+                        country=candidate.destination_country,
+                        city=candidate.destination_city,
+                        score=100.0,
+                        sequence_score=100.0,
+                        token_sort_score=100.0,
+                        subset_score=100.0,
+                    )
                 ],
             )
 
@@ -572,6 +619,10 @@ def match_one(
             status="unmatched",
             method="none",
             score=0.0,
+            sequence_score=None,
+            token_sort_score=None,
+            subset_score=None,
+            margin=None,
             rc_row_id=None,
             destination_country=None,
             destination_city=None,
@@ -581,11 +632,12 @@ def match_one(
         )
 
     ranked = dedupe_ranked(
-        (candidate, city_score(normalized_city, candidate.normalized_city))
+        (candidate, city_score_breakdown(normalized_city, candidate.normalized_city))
         for candidate in candidate_pool
     )
-    top_candidate, top_score = ranked[0]
-    second_score = ranked[1][1] if len(ranked) > 1 else 0.0
+    top_candidate, top_breakdown = ranked[0]
+    top_score = top_breakdown.final
+    second_score = ranked[1][1].final if len(ranked) > 1 else 0.0
     margin = top_score - second_score
 
     if top_score >= auto_threshold and (top_score == 100.0 or margin >= min_margin):
@@ -599,6 +651,10 @@ def match_one(
         status=status,
         method="fuzzy",
         score=round(top_score, 1),
+        sequence_score=round(top_breakdown.sequence, 1),
+        token_sort_score=round(top_breakdown.token_sort, 1),
+        subset_score=round(top_breakdown.subset, 1),
+        margin=round(margin, 1),
         rc_row_id=top_candidate.rc_row_id if status != "unmatched" else None,
         destination_country=top_candidate.destination_country
         if status != "unmatched"
@@ -607,8 +663,15 @@ def match_one(
         normalized_delivery_city=normalized_city,
         candidate_count=len(candidate_pool),
         top_candidates=[
-            (candidate.destination_country, candidate.destination_city, round(score, 1))
-            for candidate, score in ranked[:3]
+            RankedChoice(
+                country=candidate.destination_country,
+                city=candidate.destination_city,
+                score=round(breakdown.final, 1),
+                sequence_score=round(breakdown.sequence, 1),
+                token_sort_score=round(breakdown.token_sort, 1),
+                subset_score=round(breakdown.subset, 1),
+            )
+            for candidate, breakdown in ranked[:3]
         ],
     )
 
@@ -618,6 +681,10 @@ def result_to_columns(result: MatchResult) -> dict[str, object]:
         "match_status": result.status,
         "match_method": result.method,
         "match_score": result.score,
+        "match_sequence_score": result.sequence_score,
+        "match_token_sort_score": result.token_sort_score,
+        "match_subset_score": result.subset_score,
+        "match_margin": result.margin,
         "matched_rc_row_id": result.rc_row_id,
         "matched_destination_country": result.destination_country,
         "matched_destination_city": result.destination_city,
@@ -628,14 +695,20 @@ def result_to_columns(result: MatchResult) -> dict[str, object]:
     for index in range(3):
         prefix = f"candidate_{index + 1}"
         if index < len(result.top_candidates):
-            country, city, score = result.top_candidates[index]
-            columns[f"{prefix}_country"] = country
-            columns[f"{prefix}_city"] = city
-            columns[f"{prefix}_score"] = score
+            choice = result.top_candidates[index]
+            columns[f"{prefix}_country"] = choice.country
+            columns[f"{prefix}_city"] = choice.city
+            columns[f"{prefix}_score"] = choice.score
+            columns[f"{prefix}_sequence_score"] = choice.sequence_score
+            columns[f"{prefix}_token_sort_score"] = choice.token_sort_score
+            columns[f"{prefix}_subset_score"] = choice.subset_score
         else:
             columns[f"{prefix}_country"] = None
             columns[f"{prefix}_city"] = None
             columns[f"{prefix}_score"] = None
+            columns[f"{prefix}_sequence_score"] = None
+            columns[f"{prefix}_token_sort_score"] = None
+            columns[f"{prefix}_subset_score"] = None
     return columns
 
 
@@ -643,6 +716,9 @@ def apply_manual_choice(record: dict[str, object], choice: int) -> dict[str, obj
     candidate_country = record.get(f"candidate_{choice}_country")
     candidate_city = record.get(f"candidate_{choice}_city")
     candidate_score = record.get(f"candidate_{choice}_score")
+    candidate_sequence_score = record.get(f"candidate_{choice}_sequence_score")
+    candidate_token_sort_score = record.get(f"candidate_{choice}_token_sort_score")
+    candidate_subset_score = record.get(f"candidate_{choice}_subset_score")
     if not candidate_country or not candidate_city:
         raise ValueError(f"Candidate {choice} is not available")
 
@@ -650,6 +726,10 @@ def apply_manual_choice(record: dict[str, object], choice: int) -> dict[str, obj
     updated["match_status"] = "manual_matched"
     updated["match_method"] = "manual"
     updated["match_score"] = candidate_score
+    updated["match_sequence_score"] = candidate_sequence_score
+    updated["match_token_sort_score"] = candidate_token_sort_score
+    updated["match_subset_score"] = candidate_subset_score
+    updated["match_margin"] = None
     updated["matched_destination_country"] = candidate_country
     updated["matched_destination_city"] = candidate_city
     return updated
@@ -715,18 +795,31 @@ def build_outputs(
         "match_status",
         "match_method",
         "match_score",
+        "match_sequence_score",
+        "match_token_sort_score",
+        "match_subset_score",
+        "match_margin",
         "matched_destination_country",
         "matched_destination_city",
         "matched_rc_row_id",
         "candidate_1_country",
         "candidate_1_city",
         "candidate_1_score",
+        "candidate_1_sequence_score",
+        "candidate_1_token_sort_score",
+        "candidate_1_subset_score",
         "candidate_2_country",
         "candidate_2_city",
         "candidate_2_score",
+        "candidate_2_sequence_score",
+        "candidate_2_token_sort_score",
+        "candidate_2_subset_score",
         "candidate_3_country",
         "candidate_3_city",
         "candidate_3_score",
+        "candidate_3_sequence_score",
+        "candidate_3_token_sort_score",
+        "candidate_3_subset_score",
     ]
     city_map = [
         {column: row.get(column) for column in city_cols}
@@ -844,7 +937,14 @@ def render_matched_pairs(
         )
         method = review_value(row.get("match_method"))
         score = review_value(row.get("match_score"))
-        line = f"  {source:<28} -> {target:<34} | {method:<6} | score {score}"
+        sequence_score = review_value(row.get("match_sequence_score")) or "-"
+        token_sort_score = review_value(row.get("match_token_sort_score")) or "-"
+        subset_score = review_value(row.get("match_subset_score")) or "-"
+        line = (
+            f"  {source:<28} -> {target:<34} | {method:<6} | "
+            f"seq {sequence_score:<5} tok {token_sort_score:<5} "
+            f"sub {subset_score:<5} final {score}"
+        )
         lines.append(colorize(line, "green", enabled=enabled))
     return lines
 
@@ -1040,6 +1140,10 @@ def apply_city_map_to_rows(
                 "match_status",
                 "match_method",
                 "match_score",
+                "match_sequence_score",
+                "match_token_sort_score",
+                "match_subset_score",
+                "match_margin",
                 "matched_destination_country",
                 "matched_destination_city",
             ]:

@@ -87,6 +87,9 @@ class CityMatcherTests(unittest.TestCase):
             "candidate_1_country": "KW",
             "candidate_1_city": "SAFAT",
             "candidate_1_score": 36.4,
+            "candidate_1_sequence_score": 36.4,
+            "candidate_1_token_sort_score": 36.4,
+            "candidate_1_subset_score": 0.0,
         }
 
         updated = apply_manual_choice(record, 1)
@@ -95,6 +98,9 @@ class CityMatcherTests(unittest.TestCase):
         self.assertEqual(updated["match_method"], "manual")
         self.assertEqual(updated["matched_destination_country"], "KW")
         self.assertEqual(updated["matched_destination_city"], "SAFAT")
+        self.assertEqual(updated["match_sequence_score"], 36.4)
+        self.assertEqual(updated["match_token_sort_score"], 36.4)
+        self.assertEqual(updated["match_subset_score"], 0.0)
 
     def test_alias_row_uses_manual_match_fields(self):
         record = {
@@ -199,6 +205,7 @@ class CityMatcherTests(unittest.TestCase):
         self.assertEqual(len(lines), 2)
         self.assertIn("fuzzy", lines[0])
         self.assertIn("100.0", lines[0])
+        self.assertIn("seq", lines[0])
         self.assertIn("manual", lines[1])
         self.assertIn("36.4", lines[1])
 

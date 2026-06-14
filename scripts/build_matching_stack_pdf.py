@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,7 @@ try:
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.graphics.shapes import Circle, Drawing, Line, Rect, String
     from reportlab.platypus import (
         HRFlowable,
         Paragraph,
@@ -31,6 +33,7 @@ except ModuleNotFoundError as exc:
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "docs"
+STATS_PATH = DOCS_DIR / "MATCHING_REAL_DATA.json"
 
 BG = HexColor("#121212")
 SURFACE = HexColor("#1E1E1E")
@@ -41,6 +44,11 @@ TEXT = HexColor("#ECE6DF")
 MUTED = HexColor("#A79B91")
 RULE = HexColor("#3A2A24")
 CODE_COLOR = "#9BBC5C"
+CHART_BLUE = HexColor("#5AA7FF")
+CHART_GOLD = HexColor("#E1B04D")
+CHART_RED = HexColor("#D26A4D")
+CHART_GREEN = HexColor("#9BBC5C")
+CHART_YELLOW = HexColor("#E0C15A")
 
 
 @dataclass(frozen=True)
@@ -49,6 +57,14 @@ class DocumentSpec:
     source: Path
     output: Path
     header: str
+
+
+@dataclass(frozen=True)
+class StatsBundle:
+    source_workbook: str
+    thresholds: dict[str, float]
+    examples: list[dict[str, object]]
+    decision_points: list[dict[str, object]]
 
 
 SPECS = {
@@ -317,10 +333,169 @@ def build_ascii_banner(
     return panel
 
 
+def load_stats_bundle() -> StatsBundle | None:
+    if not STATS_PATH.exists():
+        return None
+
+    raw = json.loads(STATS_PATH.read_text(encoding="utf-8"))
+    return StatsBundle(
+        source_workbook=str(raw.get("source_workbook") or ""),
+        thresholds={
+            "auto": float(raw.get("thresholds", {}).get("auto", 90.0)),
+            "review": float(raw.get("thresholds", {}).get("review", 75.0)),
+            "margin": float(raw.get("thresholds", {}).get("margin", 3.0)),
+        },
+        examples=list(raw.get("examples") or []),
+        decision_points=list(raw.get("decision_points") or []),
+    )
+
+
+def truncate_label(value: str, limit: int = 26) -> str:
+    return value if len(value) <= limit else value[: limit - 1] + "…"
+
+
+def chart_panel(drawing: Drawing, content_width: float) -> Table:
+    panel = Table([[drawing]], colWidths=[content_width])
+    panel.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), SURFACE_SOFT),
+                ("BOX", (0, 0), (-1, -1), 0.8, RULE),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    return panel
+
+
+def build_fuzzy_chart(bundle: StatsBundle, fonts: dict[str, str], content_width: float) -> Table | None:
+    examples = bundle.examples[:6]
+    if not examples:
+        return None
+
+    width = max(int(content_width - 20), 360)
+    row_gap = 52
+    top_margin = 56
+    height = top_margin + len(examples) * row_gap + 24
+    drawing = Drawing(width, height)
+    mono = fonts["mono"]
+    sans = fonts["sans"]
+
+    drawing.add(String(0, height - 18, "Real data / selected fuzzy matches", fontName=mono, fontSize=8, fillColor=MUTED))
+    drawing.add(String(0, height - 34, f"Workbook: {bundle.source_workbook}", fontName=sans, fontSize=8.5, fillColor=MUTED))
+
+    bar_left = 185
+    bar_width = width - bar_left - 16
+    scale = bar_width / 100.0
+    colors = [
+        ("seq", CHART_BLUE, "sequence"),
+        ("tok", CHART_GOLD, "token_sort"),
+        ("sub", CHART_RED, "subset"),
+        ("fin", CHART_GREEN, "final"),
+    ]
+
+    legend_x = 0
+    for index, (short_label, color, _) in enumerate(colors):
+        drawing.add(Rect(legend_x + index * 76, height - 48, 10, 10, fillColor=color, strokeColor=color))
+        drawing.add(String(legend_x + 14 + index * 76, height - 46, short_label, fontName=mono, fontSize=7.5, fillColor=TEXT))
+
+    for tick in range(0, 101, 20):
+        x = bar_left + tick * scale
+        drawing.add(Line(x, 18, x, height - 58, strokeColor=RULE, strokeWidth=0.5))
+        drawing.add(String(x - 6, 6, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
+
+    for row_index, example in enumerate(examples):
+        base_y = height - top_margin - row_index * row_gap
+        label = truncate_label(str(example.get("label") or ""))
+        drawing.add(String(0, base_y + 10, label, fontName=sans, fontSize=7.7, fillColor=TEXT))
+        values = {
+            "sequence": float(example.get("sequence") or 0.0),
+            "token_sort": float(example.get("token_sort") or 0.0),
+            "subset": float(example.get("subset") or 0.0),
+            "final": float(example.get("final") or 0.0),
+        }
+        for offset, (_, color, key) in enumerate(colors):
+            y = base_y - offset * 8
+            drawing.add(Rect(bar_left, y, values[key] * scale, 5.6, fillColor=color, strokeColor=color))
+        drawing.add(String(bar_left + bar_width + 6, base_y - 6, str(round(values["final"], 1)), fontName=mono, fontSize=7.3, fillColor=TEXT))
+
+    return chart_panel(drawing, content_width)
+
+
+def build_decision_chart(bundle: StatsBundle, fonts: dict[str, str], content_width: float) -> Table | None:
+    points = bundle.decision_points
+    if not points:
+        return None
+
+    width = max(int(content_width - 20), 360)
+    height = 250
+    drawing = Drawing(width, height)
+    mono = fonts["mono"]
+    sans = fonts["sans"]
+
+    chart_left = 54
+    chart_bottom = 38
+    chart_width = width - 82
+    chart_height = 150
+    max_margin = max(float(point.get("margin") or 0.0) for point in points)
+    y_max = max(6.0, min(25.0, max_margin + 2.0))
+
+    drawing.add(String(0, height - 18, "Real data / score vs margin", fontName=mono, fontSize=8, fillColor=MUTED))
+    drawing.add(String(0, height - 34, f"Workbook: {bundle.source_workbook}", fontName=sans, fontSize=8.5, fillColor=MUTED))
+
+    drawing.add(Line(chart_left, chart_bottom, chart_left, chart_bottom + chart_height, strokeColor=TEXT, strokeWidth=0.8))
+    drawing.add(Line(chart_left, chart_bottom, chart_left + chart_width, chart_bottom, strokeColor=TEXT, strokeWidth=0.8))
+
+    for tick in range(0, 101, 20):
+        x = chart_left + chart_width * (tick / 100.0)
+        drawing.add(Line(x, chart_bottom, x, chart_bottom + chart_height, strokeColor=RULE, strokeWidth=0.5))
+        drawing.add(String(x - 6, chart_bottom - 16, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
+
+    y_ticks = [0, round(y_max / 3, 1), round(2 * y_max / 3, 1), round(y_max, 1)]
+    for tick in y_ticks:
+        y = chart_bottom + chart_height * (tick / y_max if y_max else 0.0)
+        drawing.add(Line(chart_left, y, chart_left + chart_width, y, strokeColor=RULE, strokeWidth=0.5))
+        drawing.add(String(8, y - 3, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
+
+    review_x = chart_left + chart_width * (bundle.thresholds["review"] / 100.0)
+    auto_x = chart_left + chart_width * (bundle.thresholds["auto"] / 100.0)
+    margin_y = chart_bottom + chart_height * (bundle.thresholds["margin"] / y_max if y_max else 0.0)
+    drawing.add(Line(review_x, chart_bottom, review_x, chart_bottom + chart_height, strokeColor=CHART_YELLOW, strokeWidth=0.8))
+    drawing.add(Line(auto_x, chart_bottom, auto_x, chart_bottom + chart_height, strokeColor=CHART_GREEN, strokeWidth=1.0))
+    drawing.add(Line(chart_left, margin_y, chart_left + chart_width, margin_y, strokeColor=CHART_RED, strokeWidth=0.8))
+
+    status_colors = {
+        "auto_matched": CHART_GREEN,
+        "review_needed": CHART_YELLOW,
+        "unmatched": CHART_RED,
+        "manual_matched": CHART_BLUE,
+    }
+    legend_items = [("auto", CHART_GREEN), ("review", CHART_YELLOW), ("unmatched", CHART_RED)]
+    for index, (label, color) in enumerate(legend_items):
+        drawing.add(Circle(12 + index * 70, height - 47, 4, fillColor=color, strokeColor=color))
+        drawing.add(String(20 + index * 70, height - 50, label, fontName=mono, fontSize=7.4, fillColor=TEXT))
+
+    for point in points:
+        x = chart_left + chart_width * (float(point.get("score") or 0.0) / 100.0)
+        margin = min(float(point.get("margin") or 0.0), y_max)
+        y = chart_bottom + chart_height * (margin / y_max if y_max else 0.0)
+        color = status_colors.get(str(point.get("status") or ""), CHART_BLUE)
+        drawing.add(Circle(x, y, 2.4, fillColor=color, strokeColor=color))
+
+    drawing.add(String(chart_left + chart_width / 2 - 22, 10, "top_score", fontName=mono, fontSize=7.5, fillColor=MUTED))
+    drawing.add(String(0, chart_bottom + chart_height + 6, "margin", fontName=mono, fontSize=7.5, fillColor=MUTED))
+    return chart_panel(drawing, content_width)
+
+
 def md_to_story(
     md_text: str,
     styles: dict[str, ParagraphStyle],
     content_width: float,
+    fonts: dict[str, str],
+    stats_bundle: StatsBundle | None,
 ) -> list[object]:
     story: list[object] = []
     in_code = False
@@ -373,10 +548,11 @@ def md_to_story(
         if line.startswith("## "):
             flush_code()
             h2_seen = True
+            heading = line[3:].strip()
             story.append(Spacer(1, 6))
             story.append(
                 Paragraph(
-                    render_inline(line[3:], styles["code"].fontName),
+                    render_inline(heading, styles["code"].fontName),
                     styles["h2"],
                 )
             )
@@ -389,16 +565,32 @@ def md_to_story(
                     spaceAfter=8,
                 )
             )
+            if stats_bundle and heading in {"Wynik końcowy fuzzy", "Final fuzzy score"}:
+                chart = build_fuzzy_chart(stats_bundle, fonts, content_width)
+                if chart:
+                    story.append(chart)
+                    story.append(Spacer(1, 8))
+            if stats_bundle and heading in {"Reguła decyzji", "Decision rules"}:
+                chart = build_decision_chart(stats_bundle, fonts, content_width)
+                if chart:
+                    story.append(chart)
+                    story.append(Spacer(1, 8))
             continue
 
         if line.startswith("### "):
             flush_code()
+            heading = line[4:].strip()
             story.append(
                 Paragraph(
-                    render_inline(line[4:], styles["code"].fontName),
+                    render_inline(heading, styles["code"].fontName),
                     styles["h3"],
                 )
             )
+            if stats_bundle and heading in {"Wynik końcowy fuzzy", "Final fuzzy score"}:
+                chart = build_fuzzy_chart(stats_bundle, fonts, content_width)
+                if chart:
+                    story.append(chart)
+                    story.append(Spacer(1, 8))
             continue
 
         if line.startswith("- "):
@@ -465,6 +657,7 @@ def build_pdf(spec: DocumentSpec, fonts: dict[str, str]) -> Path:
         raise FileNotFoundError(f"Source markdown not found: {spec.source}")
 
     styles = build_styles(fonts)
+    stats_bundle = load_stats_bundle()
     md_text = spec.source.read_text(encoding="utf-8")
     doc = SimpleDocTemplate(
         str(spec.output),
@@ -476,7 +669,7 @@ def build_pdf(spec: DocumentSpec, fonts: dict[str, str]) -> Path:
         title=spec.source.stem,
         author="Codex",
     )
-    story = md_to_story(md_text, styles, doc.width)
+    story = md_to_story(md_text, styles, doc.width, fonts, stats_bundle)
     renderer = draw_page(spec, fonts)
     doc.build(story, onFirstPage=renderer, onLaterPages=renderer)
     return spec.output
