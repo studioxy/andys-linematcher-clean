@@ -282,3 +282,154 @@ It is not:
 - machine learning
 
 It is a deterministic fuzzy matcher with manual memory and thresholded review.
+
+## Glossary
+
+### Fuzzy matching
+
+Text matching that does not require exact character-for-character equality.
+
+It tries to answer:
+
+- do these two strings look similar enough to be treated as the same place
+
+### Exact match
+
+Strict matching where both values must be identical after comparison.
+
+### Heuristic
+
+A practical scoring rule or simplified decision rule that works well on real-world data.
+
+### Deterministic
+
+Given the same input data and the same thresholds, the program always returns the same result.
+
+### Normalization
+
+Standardizing text before comparison, for example by:
+
+- uppercasing
+- stripping punctuation
+- collapsing whitespace
+- removing diacritics
+
+### Token
+
+A single text unit, usually a word after splitting a normalized string.
+
+### Tokenization
+
+Splitting text into tokens.
+
+### Gestalt similarity
+
+Character-block similarity based on large shared sequence fragments.
+
+In this project it is implemented with:
+
+- `difflib.SequenceMatcher`
+
+### Ratcliff-Obershelp
+
+A family of sequence similarity ideas centered on finding the largest shared chunks between two strings.
+
+### Token sort similarity
+
+A method that:
+
+1. splits both strings into tokens
+2. sorts tokens alphabetically
+3. compares the sorted strings
+
+This helps when the same words appear in a different order.
+
+### Subset / containment
+
+A heuristic that checks whether the shorter token set is fully contained in the longer one.
+
+### Candidate ranking
+
+A sorted list of possible RC matches, ordered from strongest to weakest.
+
+### Candidate
+
+A single possible RC record that may match the source city.
+
+### `top_score`
+
+The best score in the candidate ranking.
+
+### `second_score`
+
+The second-best score in the candidate ranking.
+
+### Margin
+
+The difference between the best and second-best score:
+
+- `margin = top_score - second_score`
+
+### Threshold
+
+A decision cutoff used to route a result into auto-match, review, or unmatched.
+
+### Auto match
+
+A match strong enough to be accepted automatically.
+
+### Manual review
+
+A case where the matcher sees a plausible candidate, but not with enough confidence to auto-accept.
+
+### Alias override
+
+A manual mapping stored in `city_aliases.csv` that bypasses fuzzy scoring.
+
+### Embedding similarity
+
+Similarity computed from vector representations of text rather than only from raw characters.
+
+In practice:
+
+- a model turns text into numeric vectors
+- similarity is computed between those vectors
+
+This can capture semantic closeness, but it is heavier and less transparent than the current heuristic stack.
+
+### Semantic similarity
+
+Similarity based more on meaning than on literal spelling.
+
+### Exonym
+
+A place name used in another language that differs from the local name.
+
+Examples:
+
+- `Munich` for `München`
+- `Vienna` for `Wien`
+
+### Endonym
+
+The local native name of a place.
+
+### Transliteration
+
+Writing the same name from another script using Latin letters.
+
+### Diacritics
+
+Characters such as:
+
+- `é`
+- `ö`
+- `ą`
+
+These are often removed during normalization.
+
+### Cross-country fallback
+
+An optional fallback path where the matcher could search outside the same country when no same-country candidate exists.
+
+It is disabled by default in this project because it increases false-match risk.

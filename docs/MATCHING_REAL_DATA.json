@@ -1,6 +1,6 @@
 {
   "source_workbook": "colector.xlsx",
-  "generated_at_utc": "2026-06-14T01:03:46.667621+00:00",
+  "generated_at_utc": "2026-06-14T01:51:11.458851+00:00",
   "thresholds": {
     "auto": 90.0,
     "review": 75.0,
@@ -15,6 +15,24 @@
       "token_sort": 83.3,
       "subset": 95.0,
       "final": 95.0
+    },
+    {
+      "label": "IL/PETAH TIKVA -> IL/PETAKH TIKVA",
+      "status": "auto_matched",
+      "winner": "tie",
+      "sequence": 95.7,
+      "token_sort": 95.7,
+      "subset": 0.0,
+      "final": 95.7
+    },
+    {
+      "label": "AE/Sharjach -> AE/SHARJAH",
+      "status": "auto_matched",
+      "winner": "tie",
+      "sequence": 93.3,
+      "token_sort": 93.3,
+      "subset": 0.0,
+      "final": 93.3
     },
     {
       "label": "AE/ABU DHABI -> AE/ABU DHABI",
@@ -36,24 +54,6 @@
     },
     {
       "label": "AE/Dubai -> AE/DUBAI",
-      "status": "auto_matched",
-      "winner": "tie",
-      "sequence": 100.0,
-      "token_sort": 100.0,
-      "subset": 100.0,
-      "final": 100.0
-    },
-    {
-      "label": "AE/Dubai, UAE -> AE/DUBAI",
-      "status": "auto_matched",
-      "winner": "tie",
-      "sequence": 100.0,
-      "token_sort": 100.0,
-      "subset": 100.0,
-      "final": 100.0
-    },
-    {
-      "label": "AE/SHARJAH -> AE/SHARJAH",
       "status": "auto_matched",
       "winner": "tie",
       "sequence": 100.0,
@@ -78,74 +78,122 @@
   "decision_points": [
     {
       "label": "AE/ABU DHABI -> AE/ABU DHABI",
+      "source": "AE/ABU DHABI",
+      "top_candidate": "AE/ABU DHABI",
+      "second_candidate": "AE/DUBAI",
       "status": "auto_matched",
       "score": 100.0,
+      "second_score": 28.6,
       "margin": 71.4
     },
     {
       "label": "AE/DUBAI -> AE/DUBAI",
+      "source": "AE/DUBAI",
+      "top_candidate": "AE/DUBAI",
+      "second_candidate": "AE/ABU DHABI",
       "status": "auto_matched",
       "score": 100.0,
+      "second_score": 42.9,
       "margin": 57.1
     },
     {
       "label": "AE/Dubai -> AE/DUBAI",
+      "source": "AE/Dubai",
+      "top_candidate": "AE/DUBAI",
+      "second_candidate": "AE/ABU DHABI",
       "status": "auto_matched",
       "score": 100.0,
+      "second_score": 42.9,
       "margin": 57.1
     },
     {
       "label": "AE/Dubai, UAE -> AE/DUBAI",
+      "source": "AE/Dubai, UAE",
+      "top_candidate": "AE/DUBAI",
+      "second_candidate": "AE/ABU DHABI",
       "status": "auto_matched",
       "score": 100.0,
+      "second_score": 42.9,
       "margin": 57.1
     },
     {
       "label": "AE/SHARJAH -> AE/SHARJAH",
+      "source": "AE/SHARJAH",
+      "top_candidate": "AE/SHARJAH",
+      "second_candidate": "AE/ABU DHABI",
       "status": "auto_matched",
       "score": 100.0,
+      "second_score": 25.0,
       "margin": 75.0
     },
     {
       "label": "AE/Sharjach -> AE/SHARJAH",
+      "source": "AE/Sharjach",
+      "top_candidate": "AE/SHARJAH",
+      "second_candidate": "AE/ABU DHABI",
       "status": "auto_matched",
       "score": 93.3,
+      "second_score": 23.5,
       "margin": 69.8
     },
     {
       "label": "AU/Warnervale -> AU/BERKELEY VALE; WARNERVALE NSW",
+      "source": "AU/Warnervale",
+      "top_candidate": "AU/BERKELEY VALE; WARNERVALE NSW",
+      "second_candidate": "AU/WELSHPOOL",
       "status": "auto_matched",
       "score": 95.0,
+      "second_score": 31.6,
       "margin": 63.4
     },
     {
       "label": "BH/AL HIDD -> BH/AL HIDD",
+      "source": "BH/AL HIDD",
+      "top_candidate": "BH/AL HIDD",
+      "second_candidate": "/",
       "status": "auto_matched",
       "score": 100.0,
+      "second_score": 0.0,
       "margin": 100.0
     },
     {
       "label": "IL/Hagit -> /",
+      "source": "IL/Hagit",
+      "top_candidate": "IL/BEIT DAGAN",
+      "second_candidate": "IL/PETAKH TIKVA",
       "status": "unmatched",
       "score": 26.7,
+      "second_score": 23.5,
       "margin": 3.1
     },
     {
       "label": "IL/PETAH TIKVA -> IL/PETAKH TIKVA",
+      "source": "IL/PETAH TIKVA",
+      "top_candidate": "IL/PETAKH TIKVA",
+      "second_candidate": "IL/BEIT DAGAN",
       "status": "auto_matched",
       "score": 95.7,
+      "second_score": 38.1,
       "margin": 57.6
     },
     {
       "label": "KW/KUWAIT -> /",
+      "source": "KW/KUWAIT",
+      "top_candidate": "KW/SAFAT",
+      "second_candidate": "/",
       "status": "unmatched",
       "score": 36.4,
+      "second_score": 0.0,
       "margin": 36.4
     },
     {
       "label": "OM/MUSCAT -> OM/MUSCAT",
+      "source": "OM/MUSCAT",
+      "top_candidate": "OM/MUSCAT",
+      "second_candidate": "/",
       "status": "auto_matched",
       "score": 100.0,
+      "second_score": 0.0,
       "margin": 100.0
     }
   ]

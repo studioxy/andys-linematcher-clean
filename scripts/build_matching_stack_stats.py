@@ -39,6 +39,16 @@ def winner_for_row(row: dict[str, object]) -> str:
     return winners[0]
 
 
+def example_priority(row: dict[str, object]) -> tuple[int, float, float]:
+    sequence = float(row.get("match_sequence_score") or 0.0)
+    token_sort = float(row.get("match_token_sort_score") or 0.0)
+    subset = float(row.get("match_subset_score") or 0.0)
+    final = float(row.get("match_score") or 0.0)
+    span = max(sequence, token_sort, subset) - min(sequence, token_sort, subset)
+    is_perfect = 1 if final >= 100.0 else 0
+    return (is_perfect, -span, -final)
+
+
 def choose_examples(rows: list[dict[str, object]], limit: int = 6) -> list[dict[str, object]]:
     buckets = {"sequence": [], "token_sort": [], "subset": [], "tie": []}
     for row in rows:
@@ -46,20 +56,12 @@ def choose_examples(rows: list[dict[str, object]], limit: int = 6) -> list[dict[
 
     selected: list[dict[str, object]] = []
     for bucket_name in ("sequence", "token_sort", "subset", "tie"):
-        bucket = sorted(
-            buckets.get(bucket_name, []),
-            key=lambda record: float(record.get("match_score") or 0.0),
-            reverse=True,
-        )
+        bucket = sorted(buckets.get(bucket_name, []), key=example_priority)
         selected.extend(bucket[:2])
 
     if len(selected) < limit:
         seen = {id(row) for row in selected}
-        remaining = sorted(
-            rows,
-            key=lambda record: float(record.get("match_score") or 0.0),
-            reverse=True,
-        )
+        remaining = sorted(rows, key=example_priority)
         for row in remaining:
             if id(row) in seen:
                 continue
@@ -88,6 +90,14 @@ def compact_label(row: dict[str, object]) -> str:
     source = f"{row.get('Arrival Country') or ''}/{row.get('Delivery City') or ''}"
     target = f"{row.get('matched_destination_country') or ''}/{row.get('matched_destination_city') or ''}"
     return f"{source} -> {target}"
+
+
+def pair_label(country: object, city: object) -> str:
+    country_text = str(country or "").strip()
+    city_text = str(city or "").strip()
+    if not country_text and not city_text:
+        return "/"
+    return f"{country_text}/{city_text}"
 
 
 def build_stats() -> dict[str, object]:
@@ -133,8 +143,18 @@ def build_stats() -> dict[str, object]:
         decision_points.append(
             {
                 "label": compact_label(row),
+                "source": pair_label(row.get("Arrival Country"), row.get("Delivery City")),
+                "top_candidate": pair_label(
+                    row.get("candidate_1_country"),
+                    row.get("candidate_1_city"),
+                ),
+                "second_candidate": pair_label(
+                    row.get("candidate_2_country"),
+                    row.get("candidate_2_city"),
+                ),
                 "status": status,
                 "score": float(row.get("match_score") or 0.0),
+                "second_score": float(row.get("candidate_2_score") or 0.0),
                 "margin": float(row.get("match_margin") or 0.0),
             }
         )

@@ -27,5 +27,7 @@ if not exist "%APP_DIR%.venv-build\Scripts\python.exe" (
   "%APP_DIR%match_cities.py"
 
 if errorlevel 1 exit /b %errorlevel%
+copy /Y "%APP_DIR%dist\linematcher.exe" "%APP_DIR%linematcher.exe" >nul
 echo.
 echo Built: %APP_DIR%dist\linematcher.exe
+echo Synced: %APP_DIR%linematcher.exe

@@ -354,6 +354,14 @@ def truncate_label(value: str, limit: int = 26) -> str:
     return value if len(value) <= limit else value[: limit - 1] + "…"
 
 
+def compact_label_text(value: str, limit: int = 38) -> str:
+    if len(value) <= limit:
+        return value
+    head = max(8, (limit - 3) // 2)
+    tail = max(6, limit - 3 - head)
+    return value[:head] + "..." + value[-tail:]
+
+
 def chart_panel(drawing: Drawing, content_width: float) -> Table:
     panel = Table([[drawing]], colWidths=[content_width])
     panel.setStyle(
@@ -377,9 +385,11 @@ def build_fuzzy_chart(bundle: StatsBundle, fonts: dict[str, str], content_width:
         return None
 
     width = max(int(content_width - 20), 360)
-    row_gap = 52
-    top_margin = 56
-    height = top_margin + len(examples) * row_gap + 24
+    label_width = 214
+    row_gap = 36
+    top_margin = 86
+    bottom_margin = 20
+    height = top_margin + len(examples) * row_gap + bottom_margin
     drawing = Drawing(width, height)
     mono = fonts["mono"]
     sans = fonts["sans"]
@@ -387,8 +397,8 @@ def build_fuzzy_chart(bundle: StatsBundle, fonts: dict[str, str], content_width:
     drawing.add(String(0, height - 18, "Real data / selected fuzzy matches", fontName=mono, fontSize=8, fillColor=MUTED))
     drawing.add(String(0, height - 34, f"Workbook: {bundle.source_workbook}", fontName=sans, fontSize=8.5, fillColor=MUTED))
 
-    bar_left = 185
-    bar_width = width - bar_left - 16
+    bar_left = label_width + 18
+    bar_width = width - bar_left - 28
     scale = bar_width / 100.0
     colors = [
         ("seq", CHART_BLUE, "sequence"),
@@ -397,20 +407,22 @@ def build_fuzzy_chart(bundle: StatsBundle, fonts: dict[str, str], content_width:
         ("fin", CHART_GREEN, "final"),
     ]
 
-    legend_x = 0
+    legend_x = bar_left
     for index, (short_label, color, _) in enumerate(colors):
-        drawing.add(Rect(legend_x + index * 76, height - 48, 10, 10, fillColor=color, strokeColor=color))
-        drawing.add(String(legend_x + 14 + index * 76, height - 46, short_label, fontName=mono, fontSize=7.5, fillColor=TEXT))
+        legend_left = legend_x + index * 54
+        drawing.add(Rect(legend_left, height - 50, 10, 10, fillColor=color, strokeColor=color))
+        drawing.add(String(legend_left + 14, height - 48, short_label, fontName=mono, fontSize=7.3, fillColor=TEXT))
 
     for tick in range(0, 101, 20):
         x = bar_left + tick * scale
-        drawing.add(Line(x, 18, x, height - 58, strokeColor=RULE, strokeWidth=0.5))
-        drawing.add(String(x - 6, 6, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
+        drawing.add(Line(x, 14, x, height - top_margin + 18, strokeColor=RULE, strokeWidth=0.5))
+        drawing.add(String(x - 6, 3, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
 
     for row_index, example in enumerate(examples):
         base_y = height - top_margin - row_index * row_gap
-        label = truncate_label(str(example.get("label") or ""))
-        drawing.add(String(0, base_y + 10, label, fontName=sans, fontSize=7.7, fillColor=TEXT))
+        label = compact_label_text(str(example.get("label") or ""), 38)
+        drawing.add(Rect(0, base_y - 8, label_width - 10, 18, fillColor=BG, strokeColor=None))
+        drawing.add(String(0, base_y + 1, label, fontName=sans, fontSize=7.7, fillColor=TEXT))
         values = {
             "sequence": float(example.get("sequence") or 0.0),
             "token_sort": float(example.get("token_sort") or 0.0),
@@ -418,54 +430,68 @@ def build_fuzzy_chart(bundle: StatsBundle, fonts: dict[str, str], content_width:
             "final": float(example.get("final") or 0.0),
         }
         for offset, (_, color, key) in enumerate(colors):
-            y = base_y - offset * 8
-            drawing.add(Rect(bar_left, y, values[key] * scale, 5.6, fillColor=color, strokeColor=color))
-        drawing.add(String(bar_left + bar_width + 6, base_y - 6, str(round(values["final"], 1)), fontName=mono, fontSize=7.3, fillColor=TEXT))
+            y = base_y - 4 - offset * 6
+            drawing.add(Rect(bar_left, y, values[key] * scale, 4.2, fillColor=color, strokeColor=color))
+        drawing.add(String(bar_left + bar_width + 8, base_y - 12, f"{values['final']:.1f}", fontName=mono, fontSize=7.3, fillColor=TEXT))
+        drawing.add(Line(0, base_y - 16, width, base_y - 16, strokeColor=SURFACE, strokeWidth=0.5))
 
     return chart_panel(drawing, content_width)
 
 
 def build_decision_chart(bundle: StatsBundle, fonts: dict[str, str], content_width: float) -> Table | None:
-    points = bundle.decision_points
-    if not points:
+    all_points = bundle.decision_points
+    if not all_points:
         return None
 
+    ranked = sorted(
+        all_points,
+        key=lambda point: (
+            float(point.get("margin") or 0.0),
+            -float(point.get("score") or 0.0),
+        ),
+    )
+    points = ranked[:5]
+    strongest = max(
+        all_points,
+        key=lambda point: (
+            float(point.get("margin") or 0.0),
+            float(point.get("score") or 0.0),
+        ),
+    )
+    if strongest not in points:
+        points.append(strongest)
+
     width = max(int(content_width - 20), 360)
-    height = 250
+    label_width = 270
+    row_gap = 42
+    top_margin = 88
+    bottom_margin = 24
+    height = top_margin + len(points) * row_gap + bottom_margin
     drawing = Drawing(width, height)
     mono = fonts["mono"]
     sans = fonts["sans"]
 
-    chart_left = 54
-    chart_bottom = 38
-    chart_width = width - 82
-    chart_height = 150
-    max_margin = max(float(point.get("margin") or 0.0) for point in points)
-    y_max = max(6.0, min(25.0, max_margin + 2.0))
+    chart_left = label_width + 18
+    chart_bottom = 20
+    chart_width = width - chart_left - 64
+    chart_height = len(points) * row_gap + 4
 
-    drawing.add(String(0, height - 18, "Real data / score vs margin", fontName=mono, fontSize=8, fillColor=MUTED))
+    drawing.add(String(0, height - 18, "Real data / top score vs second score", fontName=mono, fontSize=8, fillColor=MUTED))
     drawing.add(String(0, height - 34, f"Workbook: {bundle.source_workbook}", fontName=sans, fontSize=8.5, fillColor=MUTED))
-
-    drawing.add(Line(chart_left, chart_bottom, chart_left, chart_bottom + chart_height, strokeColor=TEXT, strokeWidth=0.8))
-    drawing.add(Line(chart_left, chart_bottom, chart_left + chart_width, chart_bottom, strokeColor=TEXT, strokeWidth=0.8))
 
     for tick in range(0, 101, 20):
         x = chart_left + chart_width * (tick / 100.0)
         drawing.add(Line(x, chart_bottom, x, chart_bottom + chart_height, strokeColor=RULE, strokeWidth=0.5))
-        drawing.add(String(x - 6, chart_bottom - 16, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
-
-    y_ticks = [0, round(y_max / 3, 1), round(2 * y_max / 3, 1), round(y_max, 1)]
-    for tick in y_ticks:
-        y = chart_bottom + chart_height * (tick / y_max if y_max else 0.0)
-        drawing.add(Line(chart_left, y, chart_left + chart_width, y, strokeColor=RULE, strokeWidth=0.5))
-        drawing.add(String(8, y - 3, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
+        drawing.add(String(x - 6, 4, str(tick), fontName=mono, fontSize=7, fillColor=MUTED))
 
     review_x = chart_left + chart_width * (bundle.thresholds["review"] / 100.0)
     auto_x = chart_left + chart_width * (bundle.thresholds["auto"] / 100.0)
-    margin_y = chart_bottom + chart_height * (bundle.thresholds["margin"] / y_max if y_max else 0.0)
     drawing.add(Line(review_x, chart_bottom, review_x, chart_bottom + chart_height, strokeColor=CHART_YELLOW, strokeWidth=0.8))
     drawing.add(Line(auto_x, chart_bottom, auto_x, chart_bottom + chart_height, strokeColor=CHART_GREEN, strokeWidth=1.0))
-    drawing.add(Line(chart_left, margin_y, chart_left + chart_width, margin_y, strokeColor=CHART_RED, strokeWidth=0.8))
+    drawing.add(String(review_x - 12, height - 50, "75", fontName=mono, fontSize=7, fillColor=CHART_YELLOW))
+    drawing.add(String(review_x - 18, height - 60, "review", fontName=mono, fontSize=6.8, fillColor=CHART_YELLOW))
+    drawing.add(String(auto_x - 10, height - 50, "90", fontName=mono, fontSize=7, fillColor=CHART_GREEN))
+    drawing.add(String(auto_x - 12, height - 60, "auto", fontName=mono, fontSize=6.8, fillColor=CHART_GREEN))
 
     status_colors = {
         "auto_matched": CHART_GREEN,
@@ -473,20 +499,38 @@ def build_decision_chart(bundle: StatsBundle, fonts: dict[str, str], content_wid
         "unmatched": CHART_RED,
         "manual_matched": CHART_BLUE,
     }
-    legend_items = [("auto", CHART_GREEN), ("review", CHART_YELLOW), ("unmatched", CHART_RED)]
+    legend_items = [("second", CHART_BLUE), ("top", CHART_GREEN), ("margin", MUTED)]
     for index, (label, color) in enumerate(legend_items):
-        drawing.add(Circle(12 + index * 70, height - 47, 4, fillColor=color, strokeColor=color))
-        drawing.add(String(20 + index * 70, height - 50, label, fontName=mono, fontSize=7.4, fillColor=TEXT))
+        legend_left = index * 76
+        drawing.add(Circle(legend_left + 4, height - 46, 4, fillColor=color, strokeColor=color))
+        drawing.add(String(legend_left + 12, height - 49, label, fontName=mono, fontSize=7.2, fillColor=TEXT))
 
-    for point in points:
-        x = chart_left + chart_width * (float(point.get("score") or 0.0) / 100.0)
-        margin = min(float(point.get("margin") or 0.0), y_max)
-        y = chart_bottom + chart_height * (margin / y_max if y_max else 0.0)
-        color = status_colors.get(str(point.get("status") or ""), CHART_BLUE)
-        drawing.add(Circle(x, y, 2.4, fillColor=color, strokeColor=color))
+    for row_index, point in enumerate(points):
+        row_y = height - top_margin - row_index * row_gap
+        source_label = compact_label_text(
+            str(point.get("source") or point.get("label") or ""),
+            34,
+        )
+        top_label = compact_label_text(str(point.get("top_candidate") or "/"), 34)
+        second_label = compact_label_text(str(point.get("second_candidate") or "/"), 34)
+        score = float(point.get("score") or 0.0)
+        second_score = float(point.get("second_score") or 0.0)
+        margin = float(point.get("margin") or 0.0)
+        top_x = chart_left + chart_width * (score / 100.0)
+        second_x = chart_left + chart_width * (second_score / 100.0)
+        top_color = status_colors.get(str(point.get("status") or ""), CHART_BLUE)
 
-    drawing.add(String(chart_left + chart_width / 2 - 22, 10, "top_score", fontName=mono, fontSize=7.5, fillColor=MUTED))
-    drawing.add(String(0, chart_bottom + chart_height + 6, "margin", fontName=mono, fontSize=7.5, fillColor=MUTED))
+        drawing.add(Rect(0, row_y - 18, label_width - 10, 30, fillColor=BG, strokeColor=None))
+        drawing.add(String(0, row_y + 8, source_label, fontName=sans, fontSize=7.5, fillColor=TEXT))
+        drawing.add(String(0, row_y - 2, f"top: {top_label}", fontName=mono, fontSize=6.8, fillColor=top_color))
+        drawing.add(String(0, row_y - 12, f"second: {second_label}", fontName=mono, fontSize=6.6, fillColor=CHART_BLUE))
+        drawing.add(Line(second_x, row_y, top_x, row_y, strokeColor=MUTED, strokeWidth=1.0))
+        drawing.add(Circle(second_x, row_y, 3.1, fillColor=CHART_BLUE, strokeColor=CHART_BLUE))
+        drawing.add(Circle(top_x, row_y, 3.4, fillColor=top_color, strokeColor=top_color))
+        drawing.add(String(chart_left + chart_width + 8, row_y - 3, f"m={margin:.1f}", fontName=mono, fontSize=7.0, fillColor=TEXT))
+        drawing.add(Line(0, row_y - 21, width, row_y - 21, strokeColor=SURFACE, strokeWidth=0.5))
+
+    drawing.add(String(chart_left + chart_width / 2 - 14, 4, "score", fontName=mono, fontSize=7.5, fillColor=MUTED))
     return chart_panel(drawing, content_width)
 
 

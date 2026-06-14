@@ -463,3 +463,254 @@ Cały "math stack" można zapisać tak:
 8. decyzja przez próg i margin
 
 To nie jest system uczony na danych. To jest deterministyczny fuzzy matcher z pamięcią aliasów i kontrolowanym routingiem do review.
+
+## Słowniczek
+
+### Fuzzy matching
+
+Podejście do dopasowywania tekstu, które nie wymaga idealnej zgodności znak po znaku.
+
+W praktyce oznacza to, że system próbuje odpowiedzieć na pytanie:
+
+- czy te dwa zapisy wyglądają wystarczająco podobnie, żeby uznać je za to samo miejsce
+
+To przeciwieństwo sztywnego dopasowania exact match.
+
+### Exact match
+
+Najprostszy typ dopasowania, w którym dwa pola muszą być identyczne po porównaniu.
+
+Przykład:
+
+- `DUBAI` i `DUBAI` pasują
+- `Dubai` i `DUBAI` bez normalizacji już niekoniecznie
+
+### Heurystyka
+
+Praktyczna reguła punktowania albo uproszczona metoda decyzji.
+
+Heurystyka nie jest "dowodem matematycznym", tylko rozsądnym przybliżeniem, które dobrze działa na realnych danych.
+
+W tym projekcie heurystykami są między innymi:
+
+- `sequence_score`
+- `token_sort_score`
+- `subset_score`
+
+### Deterministyczny
+
+Taki system zawsze daje ten sam wynik dla tych samych danych wejściowych i tych samych progów.
+
+To ważne operacyjnie, bo:
+
+- łatwiej odtworzyć wynik
+- łatwiej wyjaśnić decyzję
+- łatwiej testować i audytować zachowanie programu
+
+### Normalizacja
+
+Proces ujednolicania tekstu przed porównaniem.
+
+Typowe operacje normalizacji to:
+
+- zamiana na wielkie litery
+- usunięcie znaków specjalnych
+- redukcja wielu spacji
+- usunięcie diakrytyków
+
+Przykład:
+
+- `Dubai, UAE` -> `DUBAI UAE`
+
+### Token
+
+Pojedynczy fragment tekstu traktowany jako słowo po rozbiciu stringa.
+
+Przykład:
+
+- `PETAH TIKVA` ma dwa tokeny:
+  - `PETAH`
+  - `TIKVA`
+
+### Tokenizacja
+
+Rozbijanie tekstu na tokeny.
+
+W tym matcherze najczęściej oznacza po prostu podział po spacjach po wcześniejszej normalizacji.
+
+### Gestalt similarity
+
+Podobieństwo oparte na wspólnych blokach znaków.
+
+Tutaj realizowane przez:
+
+- `difflib.SequenceMatcher`
+
+Dobrze łapie:
+
+- literówki
+- brak jednej litery
+- lekkie warianty pisowni
+
+### Ratcliff-Obershelp
+
+Rodzina metod podobieństwa sekwencji, na której opiera się intuicja działania `SequenceMatcher`.
+
+Chodzi o szukanie możliwie dużych wspólnych fragmentów między dwoma napisami.
+
+### Token sort similarity
+
+Metoda, w której:
+
+1. rozbijamy tekst na tokeny
+2. sortujemy tokeny alfabetycznie
+3. porównujemy wynik jak zwykły string
+
+To pomaga, gdy słowa są te same, ale występują w innej kolejności.
+
+### Subset / containment
+
+Heurystyka sprawdzająca, czy krótsza nazwa jest zawarta w dłuższej nazwie.
+
+Przykład:
+
+- `WARNERVALE`
+- `BERKELEY VALE WARNERVALE NSW`
+
+Tutaj rdzeń jednej nazwy mieści się w drugiej, więc matcher traktuje to jako mocny sygnał.
+
+### Ranking kandydatów
+
+Lista możliwych dopasowań posortowana od najlepszego wyniku do najsłabszego.
+
+Zwykle interesują nas przede wszystkim:
+
+- kandydat numer 1
+- kandydat numer 2
+- przewaga pierwszego nad drugim
+
+### Kandydat
+
+Pojedynczy możliwy rekord RC, do którego może zostać przypisane miasto z shipment report.
+
+### top_score
+
+Najwyższy score w rankingu kandydatów dla danego miasta źródłowego.
+
+To jest bieżący "faworyt" matchera.
+
+### second_score
+
+Drugi najlepszy wynik w rankingu kandydatów.
+
+Jest ważny nie dlatego, że ma wygrać, ale dlatego, że pokazuje siłę konkurencji wobec najlepszego kandydata.
+
+### Margin
+
+Różnica pomiędzy najlepszym i drugim najlepszym wynikiem:
+
+- `margin = top_score - second_score`
+
+Duży margin oznacza:
+
+- zwycięzca wyraźnie odskakuje od reszty
+
+Mały margin oznacza:
+
+- matcher nie jest bardzo pewny
+- dwa kandydaty są do siebie zbyt zbliżone punktowo
+
+### Threshold
+
+Próg decyzyjny używany do routingu wyniku.
+
+W tym projekcie są trzy kluczowe parametry:
+
+- `auto_threshold`
+- `review_threshold`
+- `min_margin`
+
+### Auto match
+
+Przypadek, w którym wynik jest na tyle mocny i jednoznaczny, że system sam zatwierdza dopasowanie.
+
+### Manual review
+
+Przypadek, w którym istnieje sensowny kandydat, ale nie ma jeszcze wystarczającej przewagi lub pewności, żeby zatwierdzić go automatycznie.
+
+### Alias override
+
+Ręcznie zatwierdzone mapowanie zapisane w `city_aliases.csv`.
+
+Jeśli alias istnieje, matcher nie musi już zgadywać i od razu przyjmuje zapisane dopasowanie.
+
+### Embedding similarity
+
+Metoda porównywania tekstów przez ich reprezentacje wektorowe, a nie tylko przez litery i tokeny.
+
+W uproszczeniu:
+
+- model zamienia tekst na wektor liczb
+- potem liczy się podobieństwo tych wektorów
+
+Taka metoda może lepiej łapać podobieństwo znaczeniowe, ale zwykle jest:
+
+- cięższa
+- mniej przejrzysta
+- trudniejsza do audytu niż prosty matcher heurystyczny
+
+### Similarity semantyczne
+
+Podobieństwo oparte bardziej na znaczeniu niż na zapisie tekstowym.
+
+Przykład ideowy:
+
+- dwa napisy mogą oznaczać to samo miejsce
+- ale wyglądać zupełnie inaczej znakowo
+
+### Egzonim
+
+Nazwa miejsca używana w obcym języku, różna od lokalnej nazwy własnej.
+
+Przykłady:
+
+- `Monachium` dla `München`
+- `Wiedeń` dla `Wien`
+- `Kolonia` dla `Köln`
+
+To ważne, bo prosty fuzzy matcher znakowy może nie połączyć takich par bez dodatkowej wiedzy.
+
+### Endonim
+
+Lokalna, własna nazwa miejsca używana na miejscu.
+
+Przykład:
+
+- `München` jest endonimem
+- `Monachium` jest polskim egzonimem
+
+### Transliteracja
+
+Zapisanie tej samej nazwy z innego alfabetu lub systemu pisma w literach łacińskich.
+
+To właśnie tu pojawiają się warianty typu:
+
+- `Petah Tikva`
+- `Petakh Tikva`
+
+### Diakrytyki
+
+Znaki takie jak:
+
+- `ą`
+- `ć`
+- `é`
+- `ö`
+
+W procesie normalizacji często usuwa się je po to, żeby ujednolicić zapis do prostszej postaci.
+
+### Cross-country fallback
+
+Awaryjna ścieżka, w której matcher mógłby szukać kandydatów także poza tym samym krajem.
+
+W tym projekcie domyślnie jest wyłączona, bo zwiększa ryzyko fałszywych dopasowań.
